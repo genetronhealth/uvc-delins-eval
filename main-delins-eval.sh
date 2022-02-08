@@ -2,6 +2,7 @@
 
 EVALROOT="$I/uvc/eval/"
 HS37D5=${EVALROOT}/datafiles/hs37d5.fa
+HSA19=${EVALROOT}/datafiles/Homo_sapiens_assembly19.fasta
 GRCH38=${EVALROOT}/datafiles/GRCh38/GCA_000001405.15_GRCh38_full_analysis_set.fna
 
 VT="${EVALROOT}/tools/vt-0.57721/vt"
@@ -10,6 +11,7 @@ java8=$I/software/jdk1.8.0_181/bin/java
 gatk4lowmem="$java8 -Xmx4g -Djava.io.tmpdir=${EVALROOT}/systmp -jar ${EVALROOT}/tools/gatk-4.1.9.0/gatk-package-4.1.9.0-local.jar"
 
 UVC=${I}/public/software/uvc-20211109/uvc1
+UVCTN=${I}/public/software/uvc-20211109/uvcTN.sh
 UVCdelins=${I}/public/software/uvc-20211109/uvc-delins-20211223/uvcvcf-raw2delins-all.sh
 
 FREEBAYES=${EVALROOT}/tools/freebayes-1.3.4-linux-static-AMD64
@@ -19,6 +21,8 @@ PINDEL=${EVALROOT}/tools/pindel-0.2.5b8/pindel
 PINDEL2VCF=${EVALROOT}/tools/pindel-0.2.5b8/pindel2vcf
 
 NORM_WITH_INDELPOST="${EVALROOT}/tools/norm-with-indelpost.py"
+
+STRELKA2="${EVALROOT}/tools/strelka-2.9.10.centos6_x86_64/bin/configureStrelkaSomaticWorkflow.py"
 
 EGFR_DEL19='7:55242415-55242513'
 EGFR_INS20='7:55248986-55249171'
@@ -30,6 +34,10 @@ TP53_DEL=17:7565097-7590856 # https://grch37.ensembl.org/Homo_sapiens/Gene/Summa
 
 datadir=$1
 flag=$2
+pattern=$3
+if [ -z "$pattern" ]; then
+    pattern=1
+fi
 
 #TARGETS="${EGFR_DEL19},${EGFR_INS20},${ERBB2_INS20},${BRCA1_DEL},${BRCA2_DEL},${TP53_DEL}"
 
@@ -67,19 +75,29 @@ for region in $TARGETS2; do
     printf "${region}\n" | sed 's/:/\t/g' | sed 's/-/\t/g'
 done > ${DELINS_BED} || true
 
-for fq1 in $(ls ${datadir}/*_1.fastq.gz); do
-    fq2=${fq1/_1.fastq.gz/_2.fastq.gz}
-    rawbam=${fq1/_1.fastq.gz/_12.bam}
-    rmdupbam=${fq1/_1.fastq.gz/_12.rmdup.bam}
-    recalbam=${fq1/_1.fastq.gz/_12.rmdup_recal.bam}
+for fq1 in $(ls ${datadir}/*_1.fastq.gz | grep ${pattern}); do
+    fq2=${fq1/%_1.fastq.gz/_2.fastq.gz}
+    rawbam=${fq1/%_1.fastq.gz/_12.bam}
+    rmdupbam=${fq1/%_1.fastq.gz/_12.rmdup.bam}
+    recalbam=${fq1/%_1.fastq.gz/_12.rmdup_recal.bam}
     srr=$(echo $fq1 | awk -F"/" '{print $NF}' | awk -F "_" '{print $1}')
     
-    if [ $(echo $datadir | grep -c SRP162370) -gt 0 ]; then # HCC1395 SEQC2-FDA
+    if [ $(echo $datadir | grep -cP "SRP162370|SRR7890887") -gt 0 ]; then # HCC1395 SEQC2-FDA
         HGREF=${GRCH38}
         dbsnp=${EVALROOT}/datafiles/GRCh38/GATK/All_20180418.vcf.gz
         tpref=$(echo $rawbam | awk -F"/" '{print $NF}' | awk -F"_" '{print $1}')
         TARGETS=chr22:$(echo $tpref | awk -F"-" '{print $3}')-$(echo $tpref | awk -F"-" '{print $4}') # SRR7890897-chr22-10714122-10714124_12.bam 
         VARTYPES=snps,mnps,other
+    elif [ $(echo $datadir | grep -c HNF4A) -gt 0 ]; then # HCC1395 SEQC2-FDA
+        HGREF=${EVALROOT}/datafiles/Homo_sapiens_assembly19.fasta # https://doi.org/10.1016/j.omtn.2021.07.016 supplementary sequence S1
+        dbsnp=${EVALROOT}/datafiles/hg19/dbsnp_138.b37.vcf
+        TARGETS="20" # ,${KRAS_ALL}
+        VARTYPES=snps,mnps,other
+    elif [ $(echo $datadir | grep -c PRJNA688630) -gt 0 ]; then # HCC1395 SEQC2-FDA
+        HGREF=${datadir}/CABE-base-editor.fna # https://doi.org/10.1016/j.omtn.2021.07.016 supplementary sequence S1
+        dbsnp=${EVALROOT}/datafiles/hg19/dbsnp_138.b37.vcf
+        TARGETS="" # ,${KRAS_ALL}
+        VARTYPES=snps,indels,mnps,other
     else
         HGREF=${HS37D5}
         dbsnp=${EVALROOT}/datafiles/hg19/dbsnp_138.b37.vcf
@@ -89,12 +107,13 @@ for fq1 in $(ls ${datadir}/*_1.fastq.gz); do
     fi
     TARGETS2=$(echo $TARGETS | sed 's/,/ /g')
     
-    myecho bwa mem -t 24 -R "\"@RG\tID:${srr}.L001\tSM:${srr}\tLB:${srr}\tPL:ILLUMINA\tPM:UNKNOWN\tPU:${srr}.L001\"" "${HGREF}" $fq1 $fq2 \
-        '|' samtools view -bh1 \
-        '|' samtools sort -o $rawbam \
-        '&&' samtools index -@8 $rawbam
-    
-    if [ $(echo $fq1 | grep -c SRP268953) -gt 0 ]; then
+    if [ $(echo $datadir | grep -cP "SRR7890887|HNF4A") -eq 0 ]; then
+        myecho bwa mem -t 24 -R "\"@RG\tID:${srr}.L001\tSM:${srr}\tLB:${srr}\tPL:ILLUMINA\tPM:UNKNOWN\tPU:${srr}.L001\"" "${HGREF}" $fq1 $fq2 \
+            '|' samtools view -bh1 \
+            '|' samtools sort -o $rawbam \
+            '&&' samtools index -@8 $rawbam
+    fi
+    if [ $(echo $fq1 | grep -cP "SRP268953|PRJNA688630") -gt 0 ]; then
         QUALTHRES=0
         uvcargs=" --dedup-flag 0x4 "
         mutect2args=" --mitochondria-mode true "
@@ -105,14 +124,27 @@ for fq1 in $(ls ${datadir}/*_1.fastq.gz); do
         uvcargs=" "
         mutect2args=" "
         minFA=0.01
-        myecho $gatk4lowmem MarkDuplicates --ASSUME_SORT_ORDER coordinate --REMOVE_DUPLICATES true -I ${rawbam} -M ${rmdupbam}.metrics -O ${rmdupbam} '&&' samtools index -@8 ${rmdupbam}
-        myecho $gatk4lowmem BaseRecalibrator -I ${rmdupbam} --known-sites $dbsnp -O ${recalbam/.bam/.table} -R ${HGREF}
-        myecho $gatk4lowmem ApplyBQSR -bqsr ${recalbam/.bam/.table} -I ${rmdupbam} -O ${recalbam} '&&' samtools index -@8 ${recalbam}
+        if [ $(echo $datadir | grep -cP "SRR7890887|HNF4A") -gt 0 ]; then
+            myecho echo NOTE: ${recalbam} is the bam aligned to only chr22 derived from the SRR7890887 reads aligned to all CRCh38 chromosomes. \
+                If ${recalbam} does not exist, please generate it manually then apply the MarkDuplicates, ..., ApplyBQSR for all the reads of SRR7890887
+            IS_GATK_SKIPPED=TRUE
+            if [ $(echo $datadir | grep -cP "HNF4A") -gt 0 ]; then
+                recalbam="${rawbam}"
+            fi
+        else
+            myecho $gatk4lowmem MarkDuplicates --ASSUME_SORT_ORDER coordinate --REMOVE_DUPLICATES true -I ${rawbam} -M ${rmdupbam}.metrics -O ${rmdupbam} '&&' samtools index -@8 ${rmdupbam}
+            myecho $gatk4lowmem BaseRecalibrator -I ${rmdupbam} --known-sites $dbsnp -O ${recalbam/.bam/.table} -R ${HGREF}
+            myecho $gatk4lowmem ApplyBQSR -bqsr ${recalbam/.bam/.table} -I ${rmdupbam} -O ${recalbam} '&&' samtools index -@8 ${recalbam}
+        fi
         inbam=${recalbam}
     fi
+    rawbam_n=$(ls ${rawbam/%.bam/.normal.dir}/*.bam) || true
+    inbam_n=$(ls ${inbam/%.bam/.normal.dir}/*.bam) || true
     
-    if [ $(echo $datadir | grep -c SRP162370) -gt 0 ]; then # HCC1395 SEQC2-FDA
+    if [ $(echo $datadir | grep -cP "SRP162370|SRR7890887") -gt 0 ]; then # HCC1395 SEQC2-FDA
         FILTCMD="\" \""
+    elif [ $(echo $datadir | grep -cP "HNF4A") -gt 0 ]; then
+        FILTCMD="\"QUAL>=${QUALTHRES}\""
     else
         FILTCMD="\"((STRLEN(REF) >= 4 || STRLEN(ALT) >= 4) || TYPE = 'mnp') && QUAL>=${QUALTHRES}\""
     fi
@@ -122,9 +154,14 @@ for fq1 in $(ls ${datadir}/*_1.fastq.gz); do
     echo "mkdir -p -m 777 ${resdir} && chmod uga+s ${resdir}"
     uvcvcf=${resdir}/uvc.vcf.gz
     uvcdelins=${resdir}/uvc-hap
-    myecho $UVC ${uvcargs} -f ${HGREF} -o ${uvcvcf} ${rawbam} -s ${srr} '2>' ${uvcvcf}.stderr
-    myecho bash -evx $UVCdelins "${HGREF}" ${uvcvcf} ${uvcdelins} '2>' ${uvcdelins}.stderr
-   
+    if [ $(echo $rawbam_n | grep -c ".bam") -gt 0 ]; then
+        nsrr=$(echo $rawbam_n | awk -F"/" '{print $NF}' | awk -F "_" '{print $1}')
+        myecho $UVCTN ${HGREF} ${rawbam} ${rawbam_n}  ${uvcvcf} ${srr},${nsrr} ${uvcargs} 
+        myecho bash -evx $UVCdelins "${HGREF}" ${uvcvcf} ${uvcdelins} '2>' ${uvcdelins}.stderr
+    else
+        myecho $UVC ${uvcargs} -f ${HGREF} -o ${uvcvcf} ${rawbam} -s ${srr} '2>' ${uvcvcf}.stderr
+        myecho bash -evx $UVCdelins "${HGREF}" ${uvcvcf} ${uvcdelins} '2>' ${uvcdelins}.stderr
+    fi
     truthvcf=${fq1/_1.fastq.gz/_12.uvc-truth.vcf} # need manual review
     callvcfgz=${uvcdelins}.merged-simple-delins.vcf.gz
     
@@ -142,18 +179,49 @@ for fq1 in $(ls ${datadir}/*_1.fastq.gz); do
             chrom=$(echo $line | awk '{print $1}')
             ref=$(echo $line | awk '{print $4}')
             alt=$(echo $line | awk '{print $5}')
-            pos=$(echo $line | awk '{print $2}')
+            #pos=$(echo $line | awk '{print $2}')
             qual=$(echo $line | awk '{print $6}')
-            python $I/scripts/igv-html/GetNTIgv.py -tb ${rawbam} -r ${HGREF} -p $chrom:$(($pos+1))  > $resdir/${qual}_${chrom}_${pos}_${ref}_${alt}_${srr}.html || true
+            pos=$(echo $line | awk '{if (length($4) > length($5)) {$2 = $2 + 1} } { print $1, $2, $4, $5} ' | awk '{print $2}')
+            if [ $(echo $rawbam_n | grep -c ".bam") -gt 0 ]; then
+                echo python $I/scripts/igv-html/GetNTIgv.py -tb ${rawbam} -r ${HGREF} -p $chrom:$pos -nb ${rawbam_n} ' > ' $resdir/${qual}_${chrom}_${pos}_${ref}_${alt}_${srr}.html #|| true
+            else
+                echo python $I/scripts/igv-html/GetNTIgv.py -tb ${rawbam} -r ${HGREF} -p $chrom:$pos ' > ' $resdir/${qual}_${chrom}_${pos}_${ref}_${alt}_${srr}.html
+            fi
         done
     fi
     
-    callvcf=${resdir}/mutect2_tonly.vcf
-    myecho $gatk4lowmem Mutect2 -R ${HGREF} -I ${inbam} -O $callvcf \
-        '&&' bcftools view -Oz -o ${callvcf}.gz $callvcf \
-        '&&' bcftools index ${callvcf}.gz
+    if [ $(echo $rawbam_n | grep -c ".bam") -gt 0 ]; then
+        tsname=$(samtools view -H ${inbam}   | grep "^@RG" | sed 's/\t/\n/g' |grep "^SM:" | awk -F":" '{print $2}' )
+        nsname=$(samtools view -H ${inbam_n} | grep "^@RG" | sed 's/\t/\n/g' |grep "^SM:" | awk -F":" '{print $2}' )
+        callvcf=${resdir}/mutect2_tnpaired.vcf
+        myecho $gatk4lowmem Mutect2 -R ${HGREF} -I ${inbam} -I ${inbam_n} --tumor ${tsname} --normal ${nsname} -O $callvcf \
+            '&&' bcftools view -Oz -o ${callvcf}.gz $callvcf \
+            '&&' bcftools index ${callvcf}.gz
+    else 
+        callvcf=${resdir}/mutect2_tonly.vcf
+        myecho $gatk4lowmem Mutect2 -R ${HGREF} -I ${inbam} -O $callvcf \
+            '&&' bcftools view -Oz -o ${callvcf}.gz $callvcf \
+            '&&' bcftools index ${callvcf}.gz
+    fi
     eval12 ${truthvcf} ${callvcf}.gz INFO/TLOD
     
+    callvcf=${resdir}/strelka2_tnpaired.vcf
+    if [ $(echo $rawbam_n | grep -c ".bam") -gt 0 ]; then
+        tsname=$(samtools view -H ${inbam}   | grep "^@RG" | sed 's/\t/\n/g' |grep "^SM:" | awk -F":" '{print $2}' )
+        nsname=$(samtools view -H ${inbam_n} | grep "^@RG" | sed 's/\t/\n/g' |grep "^SM:" | awk -F":" '{print $2}' )
+        myecho "rm -r \"${callvcf}.rundir/\" || true"
+        myecho $STRELKA2 --referenceFasta="${HGREF}" --runDir="${callvcf}.rundir" --tumorBam="${rawbam}" --normalBam="${rawbam_n}" \
+            '1>' "${callvcf}.rundir-config.stdout"  
+        myecho "${callvcf}.rundir/runWorkflow.py" -j 8 -m local \
+            '1>' "${callvcf}.rundir/runWorkflow.stdout" \
+            '2>' "${callvcf}.rundir/runWorkflow.stderr"
+        # '|' awk "'OFS=\"\t\" { if ($0 !~ \"^#\") {$9=\"GT:\"$9; $10=\"0/1:\"$10; $11=\"0/1:\"$11; print; } else { print;}}'" \
+        myecho bcftools concat -a "${callvcf}.rundir/results/variants/somatic.snvs.vcf.gz" "${callvcf}.rundir/results/variants/somatic.indels.vcf.gz" \
+                '|' bcftools view -Oz -o "${callvcf}.gz" \
+                '&&' bcftools index -f "${callvcf}.gz"
+        eval12 ${truthvcf} ${callvcf}.gz INFO/SomaticEVS
+    fi
+
     if [ $(echo $flag | grep run-indelpost -c) -gt 0 ]; then
         bcftools view ${callvcf}.gz $TARGETS \
             | ${MY_PYTHON} ${NORM_WITH_INDELPOST} ${HGREF} ${inbam} \
@@ -170,19 +238,23 @@ for fq1 in $(ls ${datadir}/*_1.fastq.gz); do
     eval12 ${truthvcf} ${callvcfgz} FORMAT/AD
     
     callvcfgz=${resdir}/vardict_tonly.vcf.gz
-    myecho ${VARDICT_DIR}/VarDict -G ${HGREF} -f $minFA -N ${srr} -b ${inbam} -c 1 -S 2 -E 3 -g 4 ${DELINS_BED} \
+    myecho "export JAVA_HOME=$I/software/jdk1.8.0_181/bin && export PATH=${JAVA_HOME}/bin:${PATH}" \
+        '&&' ${VARDICT_DIR}/VarDict -G ${HGREF} -f $minFA -N ${srr} -b ${inbam} -c 1 -S 2 -E 3 -g 4 ${DELINS_BED} \
         '|' Rscript ${VARDICT_DIR}/teststrandbias.R \
         '|' ${VARDICT_DIR}/var2vcf_valid.pl -N ${srr} -E -f $minFA \
         '|' bcftools view -Oz -o ${callvcfgz} \
         '&&' bcftools index ${callvcfgz}
     eval12 ${truthvcf} ${callvcfgz} FORMAT/AD
     
+    if [ $(echo $datadir | grep -c SRR7890887) -eq 0 ]; then
     callvcfgz=${resdir}/indelseek_tonly.vcf.gz
     myecho samtools view ${inbam} ${TARGETS} \
         '|' ${INDELSEEK} --refseq $HGREF \
-        '|' bcftools view -fPASS -Oz -o ${callvcfgz} - \
+        '|' bcftools view -fPASS -Ou - \
+        '|' bcftools sort -Oz -o ${callvcfgz} - \
         '&&' bcftools index ${callvcfgz}
     eval12 ${truthvcf} ${callvcfgz} QUAL
+    fi
     
     callvcf=${resdir}/pindel_tonly.vcf
     callvcfgz=${resdir}/pindel_tonly.vcf.gz
