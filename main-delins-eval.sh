@@ -29,6 +29,11 @@ fi
 #TARGETS="${EGFR_DEL19},${EGFR_INS20},${ERBB2_INS20},${BRCA1_DEL},${BRCA2_DEL},${TP53_DEL}"
 
 export PATH="${EVALROOT}/tools:${PATH}"
+bwa=$(which bwa)
+bcftools=$(which bcftools)
+samtools=$(which samtools)
+UVC=$(which uvc1)
+UVCTN=$(which uvcTN.sh)
 
 function myecho {
     echo 'for i in 1 2 3; do ' $@ ' ; if [ $? -eq 0 ] ; then break ; fi ; done ; if [ $? -ne 0 ]; then exit $? ; fi ;'
@@ -43,14 +48,14 @@ function eval12 {
         callvcf2=${invcf/.vcf/}.${region/:/-}.vcf
         summary=${invcf/.vcf/}.summary.${region/:/-}.txt
         echo "# STEP-TRUTH-EVAL-01"
-        myecho bcftools view -v $VARTYPES -i "\"ALT != '*'\"" -r $region $invcf  \
-            '|' bcftools norm -m-any -f ${HGREF} - \
+        myecho $bcftools view -v $VARTYPES -i "\"ALT != '*'\"" -r $region $invcf  \
+            '|' $bcftools norm -m-any -f ${HGREF} - \
             '|' $VT normalize -r ${HGREF} - \
-            '|' bcftools norm -m-any -f ${HGREF} - \
-            '|' bcftools view -i "\"ALT != '*'\"" -v $VARTYPES - \
+            '|' $bcftools norm -m-any -f ${HGREF} - \
+            '|' $bcftools view -i "\"ALT != '*'\"" -v $VARTYPES - \
             '>' ${callvcf2} 
         echo "# STEP-TRUTH-EVAL-02"
-        myecho bcftools view $truthvcf -t $region \
+        myecho $bcftools view $truthvcf -t $region \
             '|' python ${I}/uvc-delins/extdata/base-call-vcfs-to-prec-sens-list.py --base-vcf - --call-vcf ${callvcf2} --field ${field} \
             '>' ${summary} 
         
@@ -65,17 +70,17 @@ for fq1 in $(ls ${datadir}/*_1.fastq.gz); do
     srr=$(echo $fq1 | awk -F"/" '{print $NF}' | awk -F "_" '{print $1}')
     
     if [ $(echo $datadir | grep -cP "SRP162370|SRR7890887") -gt 0 ]; then # HCC1395 SEQC2-FDA
-        HGREF=${GRCH38}
-        dbsnp=${EVALROOT}/datafiles/GRCh38/GATK/All_20180418.vcf.gz
+        HGREF=${GRCH38} # Not auto-downloaded here
+        dbsnp=${EVALROOT}/datafiles/GRCh38/GATK/All_20180418.vcf.gz # Not auto-downloaded here
         tpref=$(echo $rawbam | awk -F"/" '{print $NF}' | awk -F"_" '{print $1}')
         TARGETS=chr22:$(echo $tpref | awk -F"-" '{print $3}')-$(echo $tpref | awk -F"-" '{print $4}') # SRR7890897-chr22-10714122-10714124_12.bam 
         VARTYPES=snps,mnps,other
-    elif [ $(echo $datadir | grep -c HNF4A) -gt 0 ]; then # HCC1395 SEQC2-FDA
-        HGREF=${EVALROOT}/datafiles/Homo_sapiens_assembly19.fasta # https://doi.org/10.1016/j.omtn.2021.07.016 supplementary sequence S1
+    elif [ $(echo $datadir | grep -c HNF4A) -gt 0 ]; then # Simulated pre-aligned data
+        HGREF=${G1KV37} # https://doi.org/10.1016/j.omtn.2021.07.016 supplementary sequence S1
         dbsnp=${EVALROOT}/datafiles/hg19/dbsnp_138.b37.vcf
         TARGETS=20:42984340-43061485 # ,${HNF4A_ALL}
         VARTYPES=snps,mnps,other
-    elif [ $(echo $datadir | grep -c PRJNA688630) -gt 0 ]; then # HCC1395 SEQC2-FDA
+    elif [ $(echo $datadir | grep -c PRJNA688630) -gt 0 ]; then # Not applicable here
         HGREF=${datadir}/CABE-base-editor.fna # https://doi.org/10.1016/j.omtn.2021.07.016 supplementary sequence S1
         dbsnp=${EVALROOT}/datafiles/hg19/dbsnp_138.b37.vcf
         TARGETS="" # ,${KRAS_ALL}
@@ -85,7 +90,6 @@ for fq1 in $(ls ${datadir}/*_1.fastq.gz); do
         dbsnp=${EVALROOT}/datafiles/hg19/dbsnp_138.b37.vcf
         TARGETS=${EGFR_DEL19},${EGFR_INS20},${ERBB2_INS20} # ,${KRAS_ALL}
         VARTYPES=indels,mnps,other
-        #TARGETS="${EGFR_DEL19},${EGFR_INS20},${KRAS_ALL}"
     fi
     
     DELINS_BED="${rawbam/%.bam/}_delins.bed"
@@ -95,10 +99,10 @@ for fq1 in $(ls ${datadir}/*_1.fastq.gz); do
     done > ${DELINS_BED} || true
     
     if [ $(echo $datadir | grep -cP "SRR7890887|HNF4A") -eq 0 ]; then
-        myecho bwa mem -t 24 -R "\"@RG\tID:${srr}.L001\tSM:${srr}\tLB:${srr}\tPL:ILLUMINA\tPM:UNKNOWN\tPU:${srr}.L001\"" "${HGREF}" $fq1 $fq2 \
-            '|' samtools view -bh1 \
-            '|' samtools sort -o $rawbam \
-            '&&' samtools index -@8 $rawbam
+        myecho $bwa mem -t 24 -R "\"@RG\tID:${srr}.L001\tSM:${srr}\tLB:${srr}\tPL:ILLUMINA\tPM:UNKNOWN\tPU:${srr}.L001\"" "${HGREF}" $fq1 $fq2 \
+            '|' $samtools view -bh1 \
+            '|' $samtools sort -o $rawbam \
+            '&&' $samtools index -@8 $rawbam
     fi
     if [ $(echo $fq1 | grep -cP "SRP268953|PRJNA688630") -gt 0 ]; then
         QUALTHRES=0
@@ -153,16 +157,16 @@ for fq1 in $(ls ${datadir}/*_1.fastq.gz); do
     callvcfgz=${uvcdelins}.merged-simple-delins.vcf.gz
     
     echo '# STEP-TRUTH-PREP '
-    myecho bcftools view -v $VARTYPES -i "\"ALT != '*'\"" ${callvcfgz} ${TARGETS} \
-        '|'  bcftools norm -m-any -f ${HGREF} - \
+    myecho $bcftools view -v $VARTYPES -i "\"ALT != '*'\"" ${callvcfgz} ${TARGETS} \
+        '|'  $bcftools norm -m-any -f ${HGREF} - \
         '|' $VT normalize -r $HGREF -  \
-        '|'  bcftools norm -m-any -f ${HGREF} - \
-        '|'  bcftools view -v $VARTYPES -i "${FILTCMD}" -  \
+        '|'  $bcftools norm -m-any -f ${HGREF} - \
+        '|'  $bcftools view -v $VARTYPES -i "${FILTCMD}" -  \
         '>' ${truthvcf}
     eval12 ${truthvcf} ${callvcfgz} QUAL
     
     if [ $(echo $flag | grep generate-igv-html -c) -gt 0 ]; then
-        bcftools view --no-header ${truthvcf} | while read -r line ; do
+        $bcftools view --no-header ${truthvcf} | while read -r line ; do
             chrom=$(echo $line | awk '{print $1}')
             ref=$(echo $line | awk '{print $4}')
             alt=$(echo $line | awk '{print $5}')
@@ -182,13 +186,13 @@ for fq1 in $(ls ${datadir}/*_1.fastq.gz); do
         nsname=$(samtools view -H ${inbam_n} | grep "^@RG" | sed 's/\t/\n/g' |grep "^SM:" | awk -F":" '{print $2}' )
         callvcf=${resdir}/mutect2_tnpaired.vcf
         myecho $gatk4lowmem Mutect2 -R ${HGREF} -I ${inbam} -I ${inbam_n} --tumor ${tsname} --normal ${nsname} -O $callvcf \
-            '&&' bcftools view -Oz -o ${callvcf}.gz $callvcf \
-            '&&' bcftools index -f ${callvcf}.gz
+            '&&' $bcftools view -Oz -o ${callvcf}.gz $callvcf \
+            '&&' $bcftools index -f ${callvcf}.gz
     else 
         callvcf=${resdir}/mutect2_tonly.vcf
         myecho $gatk4lowmem Mutect2 -R ${HGREF} -I ${inbam} -O $callvcf \
-            '&&' bcftools view -Oz -o ${callvcf}.gz $callvcf \
-            '&&' bcftools index -f ${callvcf}.gz
+            '&&' $bcftools view -Oz -o ${callvcf}.gz $callvcf \
+            '&&' $bcftools index -f ${callvcf}.gz
     fi
     eval12 ${truthvcf} ${callvcf}.gz INFO/TLOD
     
@@ -203,35 +207,35 @@ for fq1 in $(ls ${datadir}/*_1.fastq.gz); do
             '1>' "${callvcf}.rundir/runWorkflow.stdout" \
             '2>' "${callvcf}.rundir/runWorkflow.stderr"
         # '|' awk "'OFS=\"\t\" { if ($0 !~ \"^#\") {$9=\"GT:\"$9; $10=\"0/1:\"$10; $11=\"0/1:\"$11; print; } else { print;}}'" \
-        myecho bcftools concat -a "${callvcf}.rundir/results/variants/somatic.snvs.vcf.gz" "${callvcf}.rundir/results/variants/somatic.indels.vcf.gz" \
-                '|' bcftools view -Oz -o "${callvcf}.gz" \
-                '&&' bcftools index -f "${callvcf}.gz"
+        myecho $bcftools concat -a "${callvcf}.rundir/results/variants/somatic.snvs.vcf.gz" "${callvcf}.rundir/results/variants/somatic.indels.vcf.gz" \
+                '|' $bcftools view -Oz -o "${callvcf}.gz" \
+                '&&' $bcftools index -f "${callvcf}.gz"
         eval12 ${truthvcf} ${callvcf}.gz INFO/SomaticEVS
     fi
     
     callvcfgz=${resdir}/freebayes_tonly.vcf.gz
     myecho $FREEBAYES --min-alternate-fraction ${minFA} --pooled-continuous --min-alternate-count 2 -f ${HGREF} ${inbam} \
-        '|' bcftools view - -Oz -o ${callvcfgz} \
-        '&&' bcftools index -f ${callvcfgz}  
+        '|' $bcftools view - -Oz -o ${callvcfgz} \
+        '&&' $bcftools index -f ${callvcfgz}  
     eval12 ${truthvcf} ${callvcfgz} FORMAT/AD
     
     callvcfgz=${resdir}/vardict_tonly.vcf.gz
     myecho ${VARDICT_DIR}/VarDict -G ${HGREF} -f $minFA -N ${srr} -b ${inbam} -c 1 -S 2 -E 3 -g 4 ${DELINS_BED} \
         '|' Rscript ${VARDICT_DIR}/teststrandbias.R \
         '|' ${VARDICT_DIR}/var2vcf_valid.pl -N ${srr} -E -f $minFA \
-        '|' bcftools view -Oz -o ${callvcfgz} \
-        '&&' bcftools index -f ${callvcfgz}
+        '|' $bcftools view -Oz -o ${callvcfgz} \
+        '&&' $bcftools index -f ${callvcfgz}
     eval12 ${truthvcf} ${callvcfgz} FORMAT/AD
     
     if [ $(echo $datadir | grep -c SRR7890887) -eq 0 ]; then
     unsortedvcfgz=${callvcfgz/%.vcf.gz/.unsorted.vcf.gz}
     callvcfgz=${resdir}/indelseek_tonly.vcf.gz
-    myecho samtools view ${inbam} -L ${DELINS_BED} \
+    myecho $samtools view ${inbam} -L ${DELINS_BED} \
         '|' ${INDELSEEK} --refseq $HGREF \
-        '|' bcftools view -fPASS -Oz - -o ${unsortedvcfgz} \
-        '&&' bcftools reheader --fai ${HGREF}.fai ${unsortedvcfgz} \
-        '|' bcftools sort -Oz -o ${callvcfgz} - \
-        '&&' bcftools index -f ${callvcfgz}
+        '|' $bcftools view -fPASS -Oz - -o ${unsortedvcfgz} \
+        '&&' $bcftools reheader --fai ${HGREF}.fai ${unsortedvcfgz} \
+        '|' $bcftools sort -Oz -o ${callvcfgz} - \
+        '&&' $bcftools index -f ${callvcfgz}
     eval12 ${truthvcf} ${callvcfgz} QUAL
     fi
     
@@ -246,7 +250,7 @@ for fq1 in $(ls ${datadir}/*_1.fastq.gz); do
     done
     myecho cat "$pindel_files > $pindel_all"
     myecho ${PINDEL2VCF} -r ${HGREF} -R 'hs37d5.fa' -d 'hs37d5' -p $pindel_all -v ${callvcf}
-    myecho bcftools view -Oz -o ${callvcfgz} ${callvcf} '&&' bcftools index -f ${callvcfgz} 
+    myecho $bcftools view -Oz -o ${callvcfgz} ${callvcf} '&&' bcftools index -f ${callvcfgz} 
     eval12 ${truthvcf} ${callvcfgz} FORMAT/AD
 done
 
