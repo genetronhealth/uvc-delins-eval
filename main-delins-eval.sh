@@ -208,16 +208,7 @@ for fq1 in $(ls ${datadir}/*_1.fastq.gz); do
                 '&&' bcftools index -f "${callvcf}.gz"
         eval12 ${truthvcf} ${callvcf}.gz INFO/SomaticEVS
     fi
-
-    if [ $(echo $flag | grep run-indelpost -c) -gt 0 ]; then
-        bcftools view ${callvcf}.gz $TARGETS \
-            | ${MY_PYTHON} ${NORM_WITH_INDELPOST} ${HGREF} ${inbam} \
-            | bcftools norm -d none \
-            | bcftools view -Oz -o ${callvcf}-indelpost.vcf.gz \
-            && bcftools index -ft ${callvcf}-indelpost.vcf.gz 
-        eval12 ${truthvcf} ${callvcf}-indelpost.vcf.gz INFO/TLOD | bash -vx
-    fi
-
+    
     callvcfgz=${resdir}/freebayes_tonly.vcf.gz
     myecho $FREEBAYES --min-alternate-fraction ${minFA} --pooled-continuous --min-alternate-count 2 -f ${HGREF} ${inbam} \
         '|' bcftools view - -Oz -o ${callvcfgz} \
