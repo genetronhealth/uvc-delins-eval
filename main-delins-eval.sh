@@ -1,28 +1,7 @@
 #!/usr/bin/env bash
 
-EVALROOT="$I/uvc/eval/"
-HS37D5=${EVALROOT}/datafiles/hs37d5.fa
-HSA19=${EVALROOT}/datafiles/Homo_sapiens_assembly19.fasta
-GRCH38=${EVALROOT}/datafiles/GRCh38/GCA_000001405.15_GRCh38_full_analysis_set.fna
-
-VT="${EVALROOT}/tools/vt-0.57721/vt"
-
-java8=$I/software/jdk1.8.0_181/bin/java
-gatk4lowmem="$java8 -Xmx4g -Djava.io.tmpdir=${EVALROOT}/systmp -jar ${EVALROOT}/tools/gatk-4.1.9.0/gatk-package-4.1.9.0-local.jar"
-
-UVC=${I}/public/software/uvc-20211109/uvc1
-UVCTN=${I}/public/software/uvc-20211109/uvcTN.sh
-UVCdelins=${I}/public/software/uvc-20211109/uvc-delins-20211223/uvcvcf-raw2delins-all.sh
-
-FREEBAYES=${EVALROOT}/tools/freebayes-1.3.4-linux-static-AMD64
-VARDICT_DIR=${EVALROOT}/tools/VarDict-1.8.3/bin/
-INDELSEEK=${EVALROOT}/tools/indelseek/indelseek.pl
-PINDEL=${EVALROOT}/tools/pindel-0.2.5b8/pindel
-PINDEL2VCF=${EVALROOT}/tools/pindel-0.2.5b8/pindel2vcf
-
-NORM_WITH_INDELPOST="${EVALROOT}/tools/norm-with-indelpost.py"
-
-STRELKA2="${EVALROOT}/tools/strelka-2.9.10.centos6_x86_64/bin/configureStrelkaSomaticWorkflow.py"
+scriptdir=$(dirname $(which $0))
+source "${scriptdir}/main-delins-eval-set-vars.sh"
 
 EGFR_DEL19='7:55242415-55242513'
 EGFR_INS20='7:55248986-55249171'
@@ -34,9 +13,17 @@ TP53_DEL=17:7565097-7590856 # https://grch37.ensembl.org/Homo_sapiens/Gene/Summa
 
 datadir=$1
 flag=$2
-pattern=$3
-if [ -z "$pattern" ]; then
-    pattern=1
+
+if [ "${1}" == '-h' -o "${1}" == '--help' -o "${1}" == '' ]; then
+    printf "Usage: ${0} \${datadir} [optional \${flag}]\n"
+    printf "  \${datadir} : the directory containing downloaded FASTQ data files. The \${datadir} path string should consist of only alpha-numeric characters. \n"
+    printf "  \${flag}    : the flag that is the empty string by default. When properly set, this flag can generate additional results. \n"
+    printf "  The stdout output is a script (let us name it as \${stdout}-script.sh) that runs BWA MEM, different variant callers, variant normalization, and variant-call performance evaluation. \n"
+    printf "    The user can run (cat \${stdout}-script.sh | grep \${keyword} | bash) to run only certain code containing the \${keyword}. \n"
+    printf "    For example, the command (cat \${stdout}-script.sh | grep STEP-TRUTH-EVAL-01 -A1) runs the step associated with TRUTH-EVAL-01. \n"
+    printf "    In the end, \${stdout}-script.sh generates \${datadir}/*.resdir/*.summary.*.txt (denoted as summary files) as the final results labeling each call\n"
+    printf "    If max_fscore is smaller than 1 in a summary file, then we check the value of n_base_[snv|indel|delins] to determine which type of ground-truth variant is missed as only one type of variant is in the base-line ground truth. \n"
+    exit 0
 fi
 
 #TARGETS="${EGFR_DEL19},${EGFR_INS20},${ERBB2_INS20},${BRCA1_DEL},${BRCA2_DEL},${TP53_DEL}"
@@ -75,7 +62,7 @@ for region in $TARGETS2; do
     printf "${region}\n" | sed 's/:/\t/g' | sed 's/-/\t/g'
 done > ${DELINS_BED} || true
 
-for fq1 in $(ls ${datadir}/*_1.fastq.gz | grep ${pattern}); do
+for fq1 in $(ls ${datadir}/*_1.fastq.gz); do
     fq2=${fq1/%_1.fastq.gz/_2.fastq.gz}
     rawbam=${fq1/%_1.fastq.gz/_12.bam}
     rmdupbam=${fq1/%_1.fastq.gz/_12.rmdup.bam}
