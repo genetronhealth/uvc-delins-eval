@@ -57,11 +57,6 @@ function eval12 {
     done
 }
 
-DELINS_BED="${datadir}/delins.bed"
-for region in $TARGETS2; do
-    printf "${region}\n" | sed 's/:/\t/g' | sed 's/-/\t/g'
-done > ${DELINS_BED} || true
-
 for fq1 in $(ls ${datadir}/*_1.fastq.gz); do
     fq2=${fq1/%_1.fastq.gz/_2.fastq.gz}
     rawbam=${fq1/%_1.fastq.gz/_12.bam}
@@ -92,7 +87,12 @@ for fq1 in $(ls ${datadir}/*_1.fastq.gz); do
         VARTYPES=indels,mnps,other
         #TARGETS="${EGFR_DEL19},${EGFR_INS20},${KRAS_ALL}"
     fi
+    
+    DELINS_BED="${rawbam/%.bam/}_delins.bed"
     TARGETS2=$(echo $TARGETS | sed 's/,/ /g')
+    for region in $TARGETS2; do
+        printf "${region}\n" | sed 's/:/\t/g' | sed 's/-/\t/g'
+    done > ${DELINS_BED} || true
     
     if [ $(echo $datadir | grep -cP "SRR7890887|HNF4A") -eq 0 ]; then
         myecho bwa mem -t 24 -R "\"@RG\tID:${srr}.L001\tSM:${srr}\tLB:${srr}\tPL:ILLUMINA\tPM:UNKNOWN\tPU:${srr}.L001\"" "${HGREF}" $fq1 $fq2 \
@@ -226,7 +226,7 @@ for fq1 in $(ls ${datadir}/*_1.fastq.gz); do
     
     if [ $(echo $datadir | grep -c SRR7890887) -eq 0 ]; then
     callvcfgz=${resdir}/indelseek_tonly.vcf.gz
-    myecho samtools view ${inbam} ${TARGETS} \
+    myecho samtools view ${inbam} -L ${DELINS_BED} \
         '|' ${INDELSEEK} --refseq $HGREF \
         '|' bcftools view -fPASS -Ou - \
         '|' bcftools sort -Oz -o ${callvcfgz} - \
