@@ -73,7 +73,7 @@ for fq1 in $(ls ${datadir}/*_1.fastq.gz); do
     elif [ $(echo $datadir | grep -c HNF4A) -gt 0 ]; then # HCC1395 SEQC2-FDA
         HGREF=${EVALROOT}/datafiles/Homo_sapiens_assembly19.fasta # https://doi.org/10.1016/j.omtn.2021.07.016 supplementary sequence S1
         dbsnp=${EVALROOT}/datafiles/hg19/dbsnp_138.b37.vcf
-        TARGETS="20" # ,${KRAS_ALL}
+        TARGETS=20:42984340-43061485 # ,${HNF4A_ALL}
         VARTYPES=snps,mnps,other
     elif [ $(echo $datadir | grep -c PRJNA688630) -gt 0 ]; then # HCC1395 SEQC2-FDA
         HGREF=${datadir}/CABE-base-editor.fna # https://doi.org/10.1016/j.omtn.2021.07.016 supplementary sequence S1
@@ -183,12 +183,12 @@ for fq1 in $(ls ${datadir}/*_1.fastq.gz); do
         callvcf=${resdir}/mutect2_tnpaired.vcf
         myecho $gatk4lowmem Mutect2 -R ${HGREF} -I ${inbam} -I ${inbam_n} --tumor ${tsname} --normal ${nsname} -O $callvcf \
             '&&' bcftools view -Oz -o ${callvcf}.gz $callvcf \
-            '&&' bcftools index ${callvcf}.gz
+            '&&' bcftools index -f ${callvcf}.gz
     else 
         callvcf=${resdir}/mutect2_tonly.vcf
         myecho $gatk4lowmem Mutect2 -R ${HGREF} -I ${inbam} -O $callvcf \
             '&&' bcftools view -Oz -o ${callvcf}.gz $callvcf \
-            '&&' bcftools index ${callvcf}.gz
+            '&&' bcftools index -f ${callvcf}.gz
     fi
     eval12 ${truthvcf} ${callvcf}.gz INFO/TLOD
     
@@ -212,25 +212,27 @@ for fq1 in $(ls ${datadir}/*_1.fastq.gz); do
     callvcfgz=${resdir}/freebayes_tonly.vcf.gz
     myecho $FREEBAYES --min-alternate-fraction ${minFA} --pooled-continuous --min-alternate-count 2 -f ${HGREF} ${inbam} \
         '|' bcftools view - -Oz -o ${callvcfgz} \
-        '&&' bcftools index ${callvcfgz}  
+        '&&' bcftools index -f ${callvcfgz}  
     eval12 ${truthvcf} ${callvcfgz} FORMAT/AD
     
     callvcfgz=${resdir}/vardict_tonly.vcf.gz
-    myecho "export JAVA_HOME=$I/software/jdk1.8.0_181/bin && export PATH=${JAVA_HOME}/bin:${PATH}" \
-        '&&' ${VARDICT_DIR}/VarDict -G ${HGREF} -f $minFA -N ${srr} -b ${inbam} -c 1 -S 2 -E 3 -g 4 ${DELINS_BED} \
+    myecho ${VARDICT_DIR}/VarDict -G ${HGREF} -f $minFA -N ${srr} -b ${inbam} -c 1 -S 2 -E 3 -g 4 ${DELINS_BED} \
         '|' Rscript ${VARDICT_DIR}/teststrandbias.R \
         '|' ${VARDICT_DIR}/var2vcf_valid.pl -N ${srr} -E -f $minFA \
         '|' bcftools view -Oz -o ${callvcfgz} \
-        '&&' bcftools index ${callvcfgz}
+        '&&' bcftools index -f ${callvcfgz}
     eval12 ${truthvcf} ${callvcfgz} FORMAT/AD
     
     if [ $(echo $datadir | grep -c SRR7890887) -eq 0 ]; then
+    unsortedvcfgz=${callvcfgz/%.vcf.gz/.unsorted.vcf.gz}
     callvcfgz=${resdir}/indelseek_tonly.vcf.gz
     myecho samtools view ${inbam} -L ${DELINS_BED} \
         '|' ${INDELSEEK} --refseq $HGREF \
-        '|' bcftools view -fPASS -Ou - \
+        '|' bcftools view -fPASS -Oz - -o ${unsortedvcfgz} #\
+        #'&&' bcftools index -f ${unsortedvcfgz}
+    myecho bcftools reheader --fai ${HGREF}.fai ${unsortedvcfgz}\
         '|' bcftools sort -Oz -o ${callvcfgz} - \
-        '&&' bcftools index ${callvcfgz}
+        '&&' bcftools index -f ${callvcfgz}
     eval12 ${truthvcf} ${callvcfgz} QUAL
     fi
     
@@ -245,7 +247,7 @@ for fq1 in $(ls ${datadir}/*_1.fastq.gz); do
     done
     myecho cat "$pindel_files > $pindel_all"
     myecho ${PINDEL2VCF} -r ${HGREF} -R 'hs37d5.fa' -d 'hs37d5' -p $pindel_all -v ${callvcf}
-    myecho bcftools view -Oz -o ${callvcfgz} ${callvcf} '&&' bcftools index ${callvcfgz} 
+    myecho bcftools view -Oz -o ${callvcfgz} ${callvcf} '&&' bcftools index -f ${callvcfgz} 
     eval12 ${truthvcf} ${callvcfgz} FORMAT/AD
 done
 
