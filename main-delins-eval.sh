@@ -228,9 +228,8 @@ for fq1 in $(ls ${datadir}/*_1.fastq.gz); do
     callvcfgz=${resdir}/indelseek_tonly.vcf.gz
     myecho samtools view ${inbam} -L ${DELINS_BED} \
         '|' ${INDELSEEK} --refseq $HGREF \
-        '|' bcftools view -fPASS -Oz - -o ${unsortedvcfgz} #\
-        #'&&' bcftools index -f ${unsortedvcfgz}
-    myecho bcftools reheader --fai ${HGREF}.fai ${unsortedvcfgz}\
+        '|' bcftools view -fPASS -Oz - -o ${unsortedvcfgz} \
+        '&&' bcftools reheader --fai ${HGREF}.fai ${unsortedvcfgz} \
         '|' bcftools sort -Oz -o ${callvcfgz} - \
         '&&' bcftools index -f ${callvcfgz}
     eval12 ${truthvcf} ${callvcfgz} QUAL
