@@ -17,7 +17,7 @@ HS37D5=${EVALROOT}/datafiles/hs37d5.fa
 GRCH38=${EVALROOT}/datafiles/GRCh38/GCA_000001405.15_GRCh38_full_analysis_set.fna
 
 # common tools
-java8=$I/public/software/jdk1.8.0_181/bin/java
+java8=$I/public/software/jdk1.8.0_181/bin/java # The java path has to be manually set
 
 # UVC tools
 UVC=${I}/public/software/uvc-20211109/uvc1
@@ -25,7 +25,7 @@ UVCTN=${I}/public/software/uvc-20211109/uvcTN.sh
 UVCdelins=${I}/public/software/uvc-delins-2022-0207/uvcvcf-raw2delins-all.sh
 
 # other bioinformatics tools
-gatk4lowmem="$java8 -Xmx4g -Djava.io.tmpdir=${EVALROOT}/systmp -jar ${EVALROOT}/tools/gatk-4.1.9.0/gatk-package-4.1.9.0-local.jar"
+gatk4lowmem="$java8 -Xmx4g -Djava.io.tmpdir=${EVALROOT}/systmp -jar ${EVALROOT}/tools/gatk-4.1.9.0/gatk-package-4.1.9.0-local.jar" # The gatk jar package has to be manually set
 VT="${EVALROOT}/tools/vt-0.57721/vt"
 FREEBAYES=${EVALROOT}/tools/freebayes-1.3.4-linux-static-AMD64
 VARDICT_DIR=${EVALROOT}/tools/VarDict-1.8.3/bin/
