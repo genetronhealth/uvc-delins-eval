@@ -8,14 +8,15 @@ set -vx
 scriptdir=$(dirname $(which "${0}"))
 source "${scriptdir}/main-delins-eval-set-vars.sh"
 
-if [ -n "${1}" ]; then
-    EVALROOT="${1}"
+if [ -n "${2}" ]; then
+    EVALROOT="${2}"
 fi
 
 # START-DOWNLOADING-INSTALLNG-REFERENCE-GENOMES
 
+mkdir -p "${EVALROOT}/datafiles/"
 pushd "${EVALROOT}/datafiles/"
-if false; then
+if [ $(echo "${1}" | grep -c skip-ref) -eq 0 ]; then
 # Download and decompress (extract) GRCh37
 wget --tries 1000 ftp://ftp.1000genomes.ebi.ac.uk/vol1/ftp/technical/reference/phase2_reference_assembly_sequence/hs37d5.fa.gz
 gzip -d hs37d5.fa.gz
@@ -36,7 +37,8 @@ popd
 
 # START-DOWNLOADING-INSTALLNG-TOOLS
 
-pushd ${EVALROOT}/tools/
+mkdir -p "${EVALROOT}/tools/"
+pushd "${EVALROOT}/tools/"
 
 # installing UVC (may take some time)
 git clone https://github.com/genetronhealth/uvc.git
