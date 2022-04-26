@@ -8,6 +8,10 @@ set -vx
 scriptdir=$(dirname $(which "${0}"))
 source "${scriptdir}/main-delins-eval-set-vars.sh"
 
+if [ -n "${1}" ]; then
+    EVALROOT="${1}"
+fi
+
 # START-DOWNLOADING-INSTALLNG-REFERENCE-GENOMES
 
 pushd "${EVALROOT}/datafiles/"
@@ -34,39 +38,53 @@ popd
 
 pushd ${EVALROOT}/tools/
 
+# installing UVC (may take some time)
+git clone https://github.com/genetronhealth/uvc.git
+pushd uvc
+git checkout 8610b54
+bash -evx ./install-dependencies.sh && make && make deploy && cp bin/* ./
+popd
+
+# installing UVC-delins
+git clone https://github.com/genetronhealth/uvc-delins.git
+pushd uvc-delins
+git checkout f2987d5
+cp -rs ../uvc/ext/ ./ && make && make deploy && cp bin/* ./
+popd
+
 ### install samtools-1.11
 wget --tries 1000 https://github.com/samtools/samtools/releases/download/1.11/samtools-1.11.tar.bz2
 tar jxvf samtools-1.11.tar.bz2
-cd samtools-1.11
+pushd samtools-1.11
 ./configure --prefix=`pwd -P` --disable-plugins --disable-libcurl --disable-s3 --disable-largefile # which will make some CRAM files produced elsewhere unreadable
 make && make install
 cp samtools ../bin
 cp misc/wgsim ../bin
-cd ..
+popd
 
 ### install bcftools-1.11
 wget --tries 1000 https://github.com/samtools/bcftools/releases/download/1.11/bcftools-1.11.tar.bz2
 tar jxvf bcftools-1.11.tar.bz2
-cd bcftools-1.11
+pushd bcftools-1.11
 ./configure --prefix=`pwd -P` --disable-plugins --disable-libcurl --disable-s3 --disable-largefile # --disable-bz2 --disable-lzma # which will make some CRAM files produced elsewhere unreadable
 make && make install
 cp bcftools ../bin
-cd ..
+popd
 
 ### install bwa-0.7.17
 wget --tries 1000 https://github.com/lh3/bwa/releases/download/v0.7.17/bwa-0.7.17.tar.bz2
 tar jxvf bwa-0.7.17.tar.bz2
-cd bwa-0.7.17
+pushd bwa-0.7.17
 make
 cp bwa ../bin
-cd ..
+popd
 
 # Download VT tools
 wget --tries 1000 https://github.com/atks/vt/archive/refs/tags/0.57721.tar.gz
 tar -xvf 0.57721.tar.gz
-cd vt-0.57721
+pushd vt-0.57721
 make
-cd ..
+popd
 
 # Get the variant callers freebayes, VarDict, indelseek, pindel, and strelka. Please note that GATK4 is regularly updated. Therefore, we recommend the user to download his/her own lateset version of GATK
 
