@@ -22,10 +22,10 @@ function getdata () {
 
 function prepdata () {
     fastafile=$(echo ${1} | sed 's;.gz$;;g')
-    zcat "${1}" > "${fastafile}"
-    bwa index $fastafile
-    samtools faidx $fastafile
-    samtools dict $fastafile
+    #zcat "${1}" > "${fastafile}"
+    #bwa index $fastafile
+    #samtools faidx $fastafile
+    samtools dict $fastafile > ${fastafile}.dict
 }
 
 # START-DOWNLOADING-INSTALLNG-TOOLS
