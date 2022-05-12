@@ -64,7 +64,8 @@ function eval12 {
     done
 }
 oneBasedIndex=1
-for fq1 in $(ls ${datadir}/*_1.fastq.gz); do
+for fq0 in $(ls -d ${datadir}/*_1.fastq.gz); do
+    fq1=$(readlink -f $fq0);
     srr=$(echo $fq1 | awk -F"/" '{print $NF}' | awk -F "_" '{print $1}')
 if true; then
     printf "### START-OF-RUN-${oneBasedIndex}-${srr}-from-${fq1} \n"
@@ -81,17 +82,17 @@ if true; then
         VARTYPES=snps,mnps,other
     elif [ $(echo $datadir | grep -c HNF4A) -gt 0 ]; then # Simulated pre-aligned data
         HGREF=${G1KV37} # https://doi.org/10.1016/j.omtn.2021.07.016 supplementary sequence S1
-        dbsnp=${EVALROOT}/datafiles/hg19/dbsnp_138.b37.vcf
+        dbsnp=${EVALROOT}/datafiles/dbsnp_138.b37.vcf
         TARGETS=20:42984340-43061485 # ,${HNF4A_ALL}
         VARTYPES=snps,mnps,other
     elif [ $(echo $datadir | grep -c PRJNA688630) -gt 0 ]; then # Not applicable here
         HGREF=${datadir}/CABE-base-editor.fna # https://doi.org/10.1016/j.omtn.2021.07.016 supplementary sequence S1
-        dbsnp=${EVALROOT}/datafiles/hg19/dbsnp_138.b37.vcf
+        dbsnp=${EVALROOT}/datafiles/dbsnp_138.b37.vcf
         TARGETS="" # ,${KRAS_ALL}
         VARTYPES=snps,indels,mnps,other
     else
         HGREF=${HS37D5}
-        dbsnp=${EVALROOT}/datafiles/hg19/dbsnp_138.b37.vcf
+        dbsnp=${EVALROOT}/datafiles/dbsnp_138.b37.vcf
         TARGETS=${EGFR_DEL19},${EGFR_INS20},${ERBB2_INS20} # ,${KRAS_ALL}
         VARTYPES=indels,mnps,other
     fi
@@ -169,7 +170,7 @@ if true; then
         '>' ${truthvcf}
     if [ $(echo ${datadir} | grep -c SRP268953) -gt 0 ]; then
         newtruth=${fq1/_1.fastq.gz/_12.uvc-truth-confirmed-by-prev-paper.vcf}
-        cat "${truthvcf}" | python "${EVALROOT}"/SRP268953.checkdir/filter_del19_by_Table_S2.py > "${newtruth}"
+        echo cat "${truthvcf}" ' | ' python "${EVALROOT}"/SRP268953.checkdir/filter_del19_by_Table_S2.py ' > ' "${newtruth}"
         truthvcf="${newtruth}"
     fi
     eval12 ${truthvcf} ${callvcfgz} QUAL
