@@ -25,7 +25,9 @@ function prepdata () {
     #zcat "${1}" > "${fastafile}"
     #bwa index $fastafile
     #samtools faidx $fastafile
-    samtools dict $fastafile > ${fastafile}.dict
+    
+    #samtools dict $fastafile > ${fastafile}.dict
+    cp ${fastafile}.dict $(echo $fastafile | awk -F"." '{$(NF) = "" ; print $0}' | sed 's; $;;g').dict
 }
 
 # START-DOWNLOADING-INSTALLNG-TOOLS
