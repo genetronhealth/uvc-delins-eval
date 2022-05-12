@@ -54,7 +54,7 @@ if [ $(echo "${PAT}" | grep -c skip-software) -eq 0 ]; then
     fi
     pushd uvc-delins
     git checkout f2987d5
-    cp -hr ../uvc/ext/ ./ && make && make deploy && cp bin/* ./
+    bash -evx ./install-dependencies.sh "$skipdown" && make && make deploy && cp bin/* ./
     popd
 
     getdata https://github.com/samtools/samtools/releases/download/1.11/samtools-1.11.tar.bz2
