@@ -12,23 +12,25 @@ BRCA2_DEL='13:32889645-32974405'
 TP53_DEL=17:7565097-7590856 # https://grch37.ensembl.org/Homo_sapiens/Gene/Summary?g=ENSG00000141510;r=17:7565097-7590856
 
 datadir=$1
-flag=$2
+outpref=$2
+flag=$3
 
 if [ "${1}" == '-h' -o "${1}" == '--help' -o "${1}" == '' ]; then
-    printf "Usage: ${0} \${datadir} [optional \${flag}]\n"
+    printf "Usage: ${0} \${datadir} \${codepre} [optional \${flag}]\n"
     printf "  \${datadir} : the directory containing downloaded FASTQ data files. The \${datadir} path string should consist of only alpha-numeric characters. \n"
+    printf "  \${codepre} : the prefix of generated scripts (can be a directory). The \${codepre} path string should consist of only alpha-numeric characters. \n"
     printf "  \${flag}    : the flag that is the empty string by default. When properly set, this flag can generate additional results. \n"
-    printf "  The stdout output is a script (let us name it as \${stdout}-script.sh) that runs BWA MEM, different variant callers, variant normalization, and variant-call performance evaluation. \n"
-    printf "    The user can run (cat \${stdout}-script.sh | grep \${keyword} | bash) to run only certain code containing the \${keyword}. \n"
-    printf "    For example, the command (cat \${stdout}-script.sh | grep STEP-TRUTH-EVAL-01 -A1) runs the step associated with TRUTH-EVAL-01. \n"
-    printf "    In the end, \${stdout}-script.sh generates \${datadir}/*.resdir/*.summary.*.txt (denoted as summary files) as the final results labeling each call\n"
+    printf "Each output script (let us name it as \$outscript) amongst \${codepre}run-<STAR>-delins-evaluation.sh runs BWA MEM, different variant callers, variant normalization, and variant-call performance evaluation \n"
+    printf "    The user can run (cat \$outscript | grep \${keyword} | bash) to run only certain code containing the \${keyword}. \n"
+    printf "    For example, the command (cat \$outscript | grep STEP-TRUTH-EVAL-01 -A1) runs the step associated with TRUTH-EVAL-01. \n"
+    printf "    In the end, \$outscript generates \${datadir}/*.resdir/*.summary.*.txt (denoted as summary files) as the final results labeling each call. \n"
     printf "    If max_fscore is smaller than 1 in a summary file, then we check the value of n_base_[snv|indel|delins] to determine which type of ground-truth variant is missed as only one type of variant is in the base-line ground truth. \n"
     exit 0
 fi
 
 #TARGETS="${EGFR_DEL19},${EGFR_INS20},${ERBB2_INS20},${BRCA1_DEL},${BRCA2_DEL},${TP53_DEL}"
 
-export PATH="${EVALROOT}/tools:${PATH}"
+export PATH="${EVALROOT}/tools:${EVALROOT}/tools/uvc/bin:${EVALROOT}/tools/uvc-delins/bin:${PATH}"
 bwa=$(which bwa)
 bcftools=$(which bcftools)
 samtools=$(which samtools)
@@ -61,13 +63,15 @@ function eval12 {
         
     done
 }
-
+oneBasedIndex=1
 for fq1 in $(ls ${datadir}/*_1.fastq.gz); do
+    srr=$(echo $fq1 | awk -F"/" '{print $NF}' | awk -F "_" '{print $1}')
+if true; then
+    printf "### START-OF-RUN-${oneBasedIndex}-${srr}-from-${fq1} \n"
     fq2=${fq1/%_1.fastq.gz/_2.fastq.gz}
     rawbam=${fq1/%_1.fastq.gz/_12.bam}
     rmdupbam=${fq1/%_1.fastq.gz/_12.rmdup.bam}
     recalbam=${fq1/%_1.fastq.gz/_12.rmdup_recal.bam}
-    srr=$(echo $fq1 | awk -F"/" '{print $NF}' | awk -F "_" '{print $1}')
     
     if [ $(echo $datadir | grep -cP "SRP162370|SRR7890887") -gt 0 ]; then # HCC1395 SEQC2-FDA
         HGREF=${GRCH38} # Not auto-downloaded here
@@ -163,6 +167,11 @@ for fq1 in $(ls ${datadir}/*_1.fastq.gz); do
         '|'  $bcftools norm -m-any -f ${HGREF} - \
         '|'  $bcftools view -v $VARTYPES -i "${FILTCMD}" -  \
         '>' ${truthvcf}
+    if [ $(echo ${datadir} | grep -c SRP268953) -gt 0 ]; then
+        newtruth=${fq1/_1.fastq.gz/_12.uvc-truth-confirmed-by-prev-paper.vcf}
+        cat "${truthvcf}" | python "${EVALROOT}"/SRP268953.checkdir/filter_del19_by_Table_S2.py > "${newtruth}"
+        truthvcf="${newtruth}"
+    fi
     eval12 ${truthvcf} ${callvcfgz} QUAL
     
     if [ $(echo $flag | grep generate-igv-html -c) -gt 0 ]; then
@@ -252,5 +261,8 @@ for fq1 in $(ls ${datadir}/*_1.fastq.gz); do
     myecho ${PINDEL2VCF} -r ${HGREF} -R 'hs37d5.fa' -d 'hs37d5' -p $pindel_all -v ${callvcf}
     myecho $bcftools view -Oz -o ${callvcfgz} ${callvcf} '&&' bcftools index -f ${callvcfgz} 
     eval12 ${truthvcf} ${callvcfgz} FORMAT/AD
+    printf "### END-OF-RUN-${oneBasedIndex}-${srr}-from-${fq1} \n"
+    oneBasedIndex=$((${oneBasedIndex}+1))
+fi > ${outpref}run-${srr}-delins-evaluation.sh
 done
 
