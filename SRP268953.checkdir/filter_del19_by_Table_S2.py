@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 import sys
 
-del19region='7:55242415-55242513'
-del19accs='''SRR12100751
+del19region = '7:55242415-55242513'
+del19accs = [x.strip() for x in '''SRR12100751
 SRR12100757
 SRR12100759
 SRR12100762
@@ -37,16 +37,16 @@ SRR12100965
 SRR12100986
 SRR12100990
 SRR12101011
-'''.strip().split()
+'''.strip().split()]
 
-ins20region='7:55248986-55249171'
-ins20accs='''SRR12100960
+ins20region = '7:55248986-55249171'
+ins20accs = [x.strip() for x in '''SRR12100960
 SRR12100967
 SRR12100927
 SRR12100997
 SRR12100844
 SRR12100802
-'''.strip().split()
+'''.strip().split()]
 
 def main():
     #del19region=sys.argv[1]
@@ -55,13 +55,13 @@ def main():
     pbegs = [int(x.split(':')[1].split('-')[0]) for x in [del19region, ins20region]]
     pends = [int(x.split(':')[1].split('-')[0]) for x in [del19region, ins20region]]
     
-    sample = ''
+    sample = sys.argv[1].strip()
     del19candidates = []
     ins20candidates = []
     for line in sys.stdin:
         if line.startswith('#'): 
-            if line.startswith('#CHROM\t'):
-                sample = line.strip().split('\t')[-1]
+            #if line.startswith('#CHROM\t'):
+            #    sample = line.strip().split('\t')[-1]
             print(line.strip())
         else:
             tokens = line.strip().split()

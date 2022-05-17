@@ -104,6 +104,7 @@ if true; then
     done > ${DELINS_BED} || true
     
     if [ $(echo $datadir | grep -cP "SRR7890887|HNF4A") -eq 0 ]; then
+        myecho rm ${rawbam}.tmp.*.bam ' || true'
         myecho $bwa mem -t 24 -R "\"@RG\tID:${srr}.L001\tSM:${srr}\tLB:${srr}\tPL:ILLUMINA\tPM:UNKNOWN\tPU:${srr}.L001\"" "${HGREF}" $fq1 $fq2 \
             '|' $samtools view -bh1 \
             '|' $samtools sort -o $rawbam \
@@ -170,7 +171,7 @@ if true; then
         '>' ${truthvcf}
     if [ $(echo ${datadir} | grep -c SRP268953) -gt 0 ]; then
         newtruth=${fq1/_1.fastq.gz/_12.uvc-truth-confirmed-by-prev-paper.vcf}
-        echo cat "${truthvcf}" ' | ' python "${EVALROOT}"/SRP268953.checkdir/filter_del19_by_Table_S2.py ' > ' "${newtruth}"
+        echo cat "${truthvcf}" ' | ' python "${EVALROOT}"/SRP268953.checkdir/filter_del19_by_Table_S2.py ${srr} ' > ' "${newtruth}"
         truthvcf="${newtruth}"
     fi
     eval12 ${truthvcf} ${callvcfgz} QUAL
