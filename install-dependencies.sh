@@ -107,6 +107,12 @@ if [ $(echo "${PAT}" | grep -c skip-software) -eq 0 ]; then
 
     getdata https://github.com/Illumina/strelka/releases/download/v2.9.10/strelka-2.9.10.centos6_x86_64.tar.bz2
     tar -xvf strelka-2.9.10.centos6_x86_64.tar.bz2
+    
+    getdata https://github.com/genome/pindel/archive/refs/tags/v0.2.5b8.tar.gz
+    tar -xvf v0.2.5b8.tar.gz
+    pushd pindel-0.2.5b8
+    ./INSTALL ../samtools-1.11/htslib-1.11/ # This step may fail, you may have to check the pindel issues on github.
+    popd
 fi
 popd
 
