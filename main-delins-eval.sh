@@ -31,11 +31,11 @@ fi
 #TARGETS="${EGFR_DEL19},${EGFR_INS20},${ERBB2_INS20},${BRCA1_DEL},${BRCA2_DEL},${TP53_DEL}"
 
 export PATH="${EVALROOT}/tools:${EVALROOT}/tools/uvc/bin:${EVALROOT}/tools/uvc-delins/bin:${PATH}"
-bwa=$(which bwa)
-bcftools=$(which bcftools)
-samtools=$(which samtools)
-UVC=$(which uvc1)
-UVCTN=$(which uvcTN.sh)
+bwa="${EVALROOT}/tools//bwa-0.7.17/bwa"
+bcftools="${EVALROOT}/tools/bcftools-1.11/bcftools"
+samtools="${EVALROOT}/tools/samtools-1.11/samtools"
+UVC="${EVALROOT}/tools/uvc/bin/uvc1"
+UVCTN="${EVALROOT}/tools/uvc/bin/uvcTN.sh"
 
 function myecho {
     echo 'for i in 1 2 3; do ' $@ ' ; if [ $? -eq 0 ] ; then break ; fi ; done ; if [ $? -ne 0 ]; then exit $? ; fi ;'
@@ -65,7 +65,7 @@ function eval12 {
 }
 oneBasedIndex=1
 for fq0 in $(ls -d ${datadir}/*_1.fastq.gz); do
-    fq1=$(readlink -f $fq0);
+    fq1=${fq0} #$(readlink -f $fq0);
     srr=$(echo $fq1 | awk -F"/" '{print $NF}' | awk -F "_" '{print $1}')
 if true; then
     printf "### START-OF-RUN-${oneBasedIndex}-${srr}-from-${fq1} \n"
@@ -105,7 +105,7 @@ if true; then
     
     if [ $(echo $datadir | grep -cP "SRR7890887|HNF4A") -eq 0 ]; then
         myecho rm ${rawbam}.tmp.*.bam ' || true'
-        myecho $bwa mem -t 24 -R "\"@RG\tID:${srr}.L001\tSM:${srr}\tLB:${srr}\tPL:ILLUMINA\tPM:UNKNOWN\tPU:${srr}.L001\"" "${HGREF}" $fq1 $fq2 \
+        myecho time -p $bwa mem -t 24 -R "\"@RG\tID:${srr}.L001\tSM:${srr}\tLB:${srr}\tPL:ILLUMINA\tPM:UNKNOWN\tPU:${srr}.L001\"" "${HGREF}" $fq1 $fq2 \
             '|' $samtools view -bh1 \
             '|' $samtools sort -o $rawbam \
             '&&' $samtools index -@8 $rawbam
@@ -129,9 +129,9 @@ if true; then
                 recalbam="${rawbam}"
             fi
         else
-            myecho $gatk4lowmem MarkDuplicates --ASSUME_SORT_ORDER coordinate --REMOVE_DUPLICATES true -I ${rawbam} -M ${rmdupbam}.metrics -O ${rmdupbam} '&&' samtools index -@8 ${rmdupbam}
-            myecho $gatk4lowmem BaseRecalibrator -I ${rmdupbam} --known-sites $dbsnp -O ${recalbam/.bam/.table} -R ${HGREF}
-            myecho $gatk4lowmem ApplyBQSR -bqsr ${recalbam/.bam/.table} -I ${rmdupbam} -O ${recalbam} '&&' samtools index -@8 ${recalbam}
+            myecho time -p $gatk4lowmem MarkDuplicates --ASSUME_SORT_ORDER coordinate --REMOVE_DUPLICATES true -I ${rawbam} -M ${rmdupbam}.metrics -O ${rmdupbam} '&&' samtools index -@8 ${rmdupbam}
+            myecho time -p $gatk4lowmem BaseRecalibrator -I ${rmdupbam} --known-sites $dbsnp -O ${recalbam/.bam/.table} -R ${HGREF}
+            myecho time -p $gatk4lowmem ApplyBQSR -bqsr ${recalbam/.bam/.table} -I ${rmdupbam} -O ${recalbam} '&&' samtools index -@8 ${recalbam}
         fi
         inbam=${recalbam}
     fi
@@ -153,11 +153,11 @@ if true; then
     uvcdelins=${resdir}/uvc-hap
     if [ $(echo $rawbam_n | grep -c ".bam") -gt 0 ]; then
         nsrr=$(echo $rawbam_n | awk -F"/" '{print $NF}' | awk -F "_" '{print $1}')
-        myecho $UVCTN ${HGREF} ${rawbam} ${rawbam_n}  ${uvcvcf} ${srr},${nsrr} ${uvcargs} 
-        myecho bash -evx $UVCdelins "${HGREF}" ${uvcvcf} ${uvcdelins} '2>' ${uvcdelins}.stderr
+        myecho time -p $UVCTN ${HGREF} ${rawbam} ${rawbam_n}  ${uvcvcf} ${srr},${nsrr} ${uvcargs} 
+        myecho time -p bash -evx $UVCdelins "${HGREF}" ${uvcvcf} ${uvcdelins} '2>' ${uvcdelins}.stderr
     else
-        myecho $UVC ${uvcargs} -f ${HGREF} -o ${uvcvcf} ${rawbam} -s ${srr} '2>' ${uvcvcf}.stderr
-        myecho bash -evx $UVCdelins "${HGREF}" ${uvcvcf} ${uvcdelins} '2>' ${uvcdelins}.stderr
+        myecho time -p $UVC ${uvcargs} -f ${HGREF} -o ${uvcvcf} ${rawbam} -s ${srr} '2>' ${uvcvcf}.stderr
+        myecho time -p bash -evx $UVCdelins "${HGREF}" ${uvcvcf} ${uvcdelins} '2>' ${uvcdelins}.stderr
     fi
     truthvcf=${fq1/_1.fastq.gz/_12.uvc-truth.vcf} # need manual review
     callvcfgz=${uvcdelins}.merged-simple-delins.vcf.gz
