@@ -112,7 +112,7 @@ if true; then
     fi
     if [ $(echo $fq1 | grep -cP "SRP268953|PRJNA688630") -gt 0 ]; then
         QUALTHRES=0
-        uvcargs=" --dedup-flag 0x4 "
+        uvcargs=" --dedup-flag 0x4 -q 5"
         mutect2args=" --mitochondria-mode true "
         minFA=0.001
         inbam=${rawbam}
