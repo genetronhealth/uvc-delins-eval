@@ -53,7 +53,7 @@ if [ $(echo "${PAT}" | grep -c skip-software) -eq 0 ]; then
         git clone https://github.com/genetronhealth/uvc-delins.git
     fi
     pushd uvc-delins
-    git checkout f2987d5
+    git checkout 6f045940ff8f694270ee16a4fd6fb3cf0a667cb4
     bash -evx ./install-dependencies.sh "$skipdown" && make && make deploy && cp bin/* ./
     popd
 
@@ -143,5 +143,13 @@ if [ $(echo "${PAT}" | grep -c skip-ref) -eq 0 ]; then
     zcat dbsnp_138.b37.vcf.gz > dbsnp_138.b37.vcf
 fi
 $gatk4lowmem IndexFeatureFile -I dbsnp_138.b37.vcf
+
+mkdir -p ${EVALROOT}/HNF4A.datadir/ && pushd ${EVALROOT}/HNF4A.datadir/
+getdata https://zenodo.org/record/3375579/files/rdemolgen/MNV-test-data-1_0.zip
+unzip MNV-test-data-1_0.zip
+cp rdemolgen-MNV-test-data-7902a56/HNF4A.bam HNF4A_12.bam
+cp rdemolgen-MNV-test-data-7902a56/HNF4A.bam.bai HNF4A_12.bam.bai
+popd
+
 popd
 
