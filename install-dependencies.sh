@@ -133,6 +133,12 @@ if [ $(echo "${PAT}" | grep -c skip-ref) -eq 0 ]; then
         getdata ftp://ftp.ncbi.nih.gov/snp/organisms/human_9606_b151_GRCh38p7/VCF/All_20180418.vcf.gz
         zcat All_20180418.vcf.gz > All_20180418.vcf
         $gatk4lowmem IndexFeatureFile -I All_20180418.vcf
+        
+        getdata https://ftp-trace.ncbi.nlm.nih.gov/ReferenceSamples/seqc/Somatic_Mutation_WG/release/v1.2/High-Confidence_Regions_v1.2.bed
+        #getdata https://ftp-trace.ncbi.nlm.nih.gov/ReferenceSamples/seqc/Somatic_Mutation_WG/release/v1.2/high-confidence_sINDEL_in_HC_regions_v1.2.vcf.gz
+        getdata https://ftp-trace.ncbi.nlm.nih.gov/ReferenceSamples/seqc/Somatic_Mutation_WG/release/v1.2/high-confidence_sSNV_in_HC_regions_v1.2.vcf.gz
+        #bcftools index -f high-confidence_sINDEL_in_HC_regions_v1.2.vcf.gz
+        bcftools index -f high-confidence_sSNV_in_HC_regions_v1.2.vcf.gz
         popd
         popd
     fi
