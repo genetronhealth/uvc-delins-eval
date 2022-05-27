@@ -80,6 +80,7 @@ if true; then
         tpref=$(echo $rawbam | awk -F"/" '{print $NF}' | awk -F"_" '{print $1}')
         TARGETS=chr22:$(echo $tpref | awk -F"-" '{print $3}')-$(echo $tpref | awk -F"-" '{print $4}') # SRR7890897-chr22-10714122-10714124_12.bam 
         VARTYPES=snps,mnps,other
+        SNV_TRUTH_VCF=${EVALROOT}/datafiles/GRCh38/high-confidence_sSNV_in_HC_regions_v1.2.vcf.gz
     elif [ $(echo $datadir | grep -c HNF4A) -gt 0 ]; then # Simulated pre-aligned data
         HGREF=${G1KV37} # https://doi.org/10.1016/j.omtn.2021.07.016 supplementary sequence S1
         dbsnp=${EVALROOT}/datafiles/dbsnp_138.b37.vcf
@@ -104,8 +105,8 @@ if true; then
     done > ${DELINS_BED} || true
     
     if [ $(echo $datadir | grep -cP "SRR7890887|HNF4A") -eq 0 ]; then
-        myecho rm ${rawbam}.tmp.*.bam ' || true'
-        myecho time -p $bwa mem -t 24 -R "\"@RG\tID:${srr}.L001\tSM:${srr}\tLB:${srr}\tPL:ILLUMINA\tPM:UNKNOWN\tPU:${srr}.L001\"" "${HGREF}" $fq1 $fq2 \
+        myecho rm ${rawbam}.tmp.*.bam ' || true ' \
+            ' && ' time -p $bwa mem -t 24 -R "\"@RG\tID:${srr}.L001\tSM:${srr}\tLB:${srr}\tPL:ILLUMINA\tPM:UNKNOWN\tPU:${srr}.L001\"" "${HGREF}" $fq1 $fq2 \
             '|' $samtools view -bh1 \
             '|' $samtools sort -o $rawbam \
             '&&' $samtools index -@8 $rawbam
@@ -122,11 +123,12 @@ if true; then
         mutect2args=" "
         minFA=0.01
         if [ $(echo $datadir | grep -cP "SRR7890887|HNF4A") -gt 0 ]; then
-            myecho echo NOTE: ${recalbam} is the bam aligned to only chr22 derived from the SRR7890887 reads aligned to all CRCh38 chromosomes. \
-                If ${recalbam} does not exist, please generate it manually then apply the MarkDuplicates, ..., ApplyBQSR for all the reads of SRR7890887
             IS_GATK_SKIPPED=TRUE
             if [ $(echo $datadir | grep -cP "HNF4A") -gt 0 ]; then
                 recalbam="${rawbam}"
+            else
+                myecho echo NOTE: ${recalbam} is the bam aligned to only chr22 derived from the SRR7890887 reads aligned to all CRCh38 chromosomes. \
+                If ${recalbam} does not exist, please generate it manually then apply the MarkDuplicates, ..., ApplyBQSR for all the reads of SRR7890887
             fi
         else
             myecho time -p $gatk4lowmem MarkDuplicates --ASSUME_SORT_ORDER coordinate --REMOVE_DUPLICATES true -I ${rawbam} -M ${rmdupbam}.metrics -O ${rmdupbam} '&&' samtools index -@8 ${rmdupbam}
@@ -163,15 +165,23 @@ if true; then
     callvcfgz=${uvcdelins}.merged-simple-delins.vcf.gz
     
     echo '# STEP-TRUTH-PREP '
+    
     myecho $bcftools view -v $VARTYPES -i "\"ALT != '*'\"" ${callvcfgz} ${TARGETS} \
-        '|'  $bcftools norm -m-any -f ${HGREF} - \
-        '|' $VT normalize -r $HGREF -  \
-        '|'  $bcftools norm -m-any -f ${HGREF} - \
-        '|'  $bcftools view -v $VARTYPES -i "${FILTCMD}" -  \
-        '>' ${truthvcf}
+            '|'  $bcftools norm -m-any -f ${HGREF} - \
+            '|' $VT normalize -r $HGREF -  \
+            '|'  $bcftools norm -m-any -f ${HGREF} - \
+            '|'  $bcftools view -v $VARTYPES -i "${FILTCMD}" -  \
+            '>' ${truthvcf}
     if [ $(echo ${datadir} | grep -c SRP268953) -gt 0 ]; then
         newtruth=${fq1/_1.fastq.gz/_12.uvc-truth-confirmed-by-prev-paper.vcf}
         echo cat "${truthvcf}" ' | ' python "${EVALROOT}"/SRP268953.checkdir/filter_del19_by_Table_S2.py ${srr} ' > ' "${newtruth}"
+        truthvcf="${newtruth}"
+    elif [ $(echo ${datadir} | grep -cP "SRP162370|SRR7890887") -gt 0 ]; then 
+        myecho echo "Use-the-manually-reviewed-truth-sets-for ${datadir}"
+        newtruth=${fq1/_1.fastq.gz/_12.uvc-truth-confirmed-by-prev-paper.vcf}
+        myecho "if [ \$($bcftools view -i 'QUAL>=20' -v mnps -t $TARGETS --no-header ${truthvcf} | wc -l) -gt 0 ]; " \
+            " then $bcftools view -i 'QUAL>=20' -v mnps -t $TARGETS -o ${newtruth} ${truthvcf} ; " \
+            " else $bcftools view -r $TARGETS -o ${newtruth} "${SNV_TRUTH_VCF}" ; fi "
         truthvcf="${newtruth}"
     fi
     eval12 ${truthvcf} ${callvcfgz} QUAL
