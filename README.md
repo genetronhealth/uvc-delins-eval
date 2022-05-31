@@ -14,7 +14,7 @@ and EVALROOT is the non-default root directory containing evaluation tools.
 The default location is specified in main-delins-eval-set-vars.sh
 
 The script main-delins-eval.sh generates the actual code used for evaluating with different datasets.
-Running ./main-delins-eval.sh ${datadir} prints the shell code to evaluate the fastq.gz data at the directory ${datadir} to stdout.
+Running ./main-delins-eval.sh &dollar;{datadir} prints the shell code to evaluate the fastq.gz data at the directory &dollar;{datadir} to stdout.
 This repository does not contain any code for downloading the raw sequencing data because the best way to get the raw sequencing data is geolocation-specific. 
 We do recommend, however, to download raw sequencing data by using this website to get the download command: https://sra-explorer.info/
 
